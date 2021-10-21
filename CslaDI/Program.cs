@@ -10,14 +10,16 @@ namespace CslaExtensions
     public static void AddCsla(this ServiceCollection services)
     {
       Csla.Configuration.ConfigurationExtensions.AddCsla(services);
-      services.AddSingleton(typeof(Csla.Core.IContextManager), typeof(Csla.Core.ApplicationContextManager));
-      services.AddSingleton<Csla.ApplicationContext>();
+      services.AddScoped(typeof(Csla.Core.IContextManager), typeof(Csla.Core.ApplicationContextManager));
+      services.AddScoped<Csla.ApplicationContext>();
+
       services.AddSingleton(typeof(Csla.Server.IDataPortalServer), typeof(Csla.Server.DataPortal));
       services.AddSingleton(typeof(Csla.Server.Dashboard.IDashboard), typeof(Csla.Server.Dashboard.Dashboard));
+      services.AddTransient<Csla.Server.DataPortalSelector>();
       services.AddTransient<Csla.Server.SimpleDataPortal>();
       services.AddTransient<Csla.Server.FactoryDataPortal>();
-      services.AddTransient<Csla.Server.DataPortalSelector>();
       services.AddTransient<Csla.Server.DataPortalBroker>();
+
       services.AddTransient(typeof(IDataPortal<>), typeof(Csla.DataPortal<>));
       services.AddTransient(typeof(IChildDataPortal<>), typeof(Csla.DataPortal<>));
     }
@@ -53,10 +55,13 @@ namespace CslaDI
   {
     public IDataPortal<PersonEdit> personPortal { get; private set; }
     public ApplicationContext ApplicationContext { get; private set; }
-    public MainApp(IDataPortal<PersonEdit> dataPortal, ApplicationContext applicationContext)
+    public Csla.Server.Dashboard.IDashboard Dashboard { get; private set; }
+
+    public MainApp(IDataPortal<PersonEdit> dataPortal, ApplicationContext applicationContext, Csla.Server.Dashboard.IDashboard dashboard)
     {
       personPortal = dataPortal;
       ApplicationContext = applicationContext;
+      Dashboard = dashboard;
     }
 
     public async Task Run()
@@ -73,12 +78,21 @@ namespace CslaDI
         person.Name = "Ali";
         await person.SaveAndMergeAsync();
         WritePerson(person);
+
+        //person = await personPortal.FetchAsync("Boo");
       }
       catch (Exception ex)
       {
         Console.WriteLine(ex.ToString());
-        throw;
       }
+
+      await Task.Delay(500);
+      Console.WriteLine();
+      Console.WriteLine($"Data portal calls");
+      Console.WriteLine($" - Completed:  {Dashboard.CompletedCalls}");
+      Console.WriteLine($" - Failed:     {Dashboard.FailedCalls}");
+      Console.WriteLine($" - First call: {Dashboard.FirstCall}");
+      Console.WriteLine($" - Last call:  {Dashboard.LastCall}");
     }
 
     private void WritePerson(PersonEdit person)
@@ -119,6 +133,9 @@ namespace CslaDI
     [Fetch]
     private void Fetch(string name, [Inject] IChildDataPortal<ContactEditList> contactPortal)
     {
+      if (name == "Boo")
+        throw new InvalidOperationException("Boo");
+
       using (BypassPropertyChecks)
       {
         Name = name;
@@ -187,6 +204,11 @@ namespace CslaDI
     }
 
     [InsertChild]
+    private void Insert()
+    {
+
+    }
+
     [UpdateChild]
     private void Update()
     {
@@ -194,7 +216,7 @@ namespace CslaDI
     }
     
     [DeleteSelfChild]
-    private void Delete()
+    private void DeleteSelf()
     { 
     
     }
