@@ -1,40 +1,19 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Csla;
+using Csla.Configuration;
+using Csla.Server.Dashboard;
 using Microsoft.Extensions.DependencyInjection;
-
-namespace CslaExtensions
-{
-  public static class Extensions
-  {
-    public static void AddCsla(this ServiceCollection services)
-    {
-      Csla.Configuration.ConfigurationExtensions.AddCsla(services);
-      services.AddScoped(typeof(Csla.Core.IContextManager), typeof(Csla.Core.ApplicationContextManager));
-      services.AddScoped<Csla.ApplicationContext>();
-
-      services.AddSingleton(typeof(Csla.Server.IDataPortalServer), typeof(Csla.Server.DataPortal));
-      services.AddSingleton(typeof(Csla.Server.Dashboard.IDashboard), typeof(Csla.Server.Dashboard.Dashboard));
-      services.AddTransient<Csla.Server.DataPortalSelector>();
-      services.AddTransient<Csla.Server.SimpleDataPortal>();
-      services.AddTransient<Csla.Server.FactoryDataPortal>();
-      services.AddTransient<Csla.Server.DataPortalBroker>();
-
-      services.AddTransient(typeof(IDataPortal<>), typeof(Csla.DataPortal<>));
-      services.AddTransient(typeof(IChildDataPortal<>), typeof(Csla.DataPortal<>));
-    }
-  }
-}
 
 namespace CslaDI
 {
-  using CslaExtensions;
   class Program
   {
     static async Task Main(string[] args)
     {
       ServiceCollection services = new();
       services.AddTransient<MainApp>();
+      services.AddSingleton(typeof(IDashboard), typeof(Dashboard));
       services.AddCsla();
       var provider = services.BuildServiceProvider();
 
@@ -46,7 +25,6 @@ namespace CslaDI
       catch (Exception ex)
       {
         Console.WriteLine(ex.ToString());
-        throw;
       }
     }
   }
@@ -54,13 +32,11 @@ namespace CslaDI
   public class MainApp
   {
     public IDataPortal<PersonEdit> personPortal { get; private set; }
-    public ApplicationContext ApplicationContext { get; private set; }
     public Csla.Server.Dashboard.IDashboard Dashboard { get; private set; }
 
-    public MainApp(IDataPortal<PersonEdit> dataPortal, ApplicationContext applicationContext, Csla.Server.Dashboard.IDashboard dashboard)
+    public MainApp(IDataPortal<PersonEdit> dataPortal, IDashboard dashboard)
     {
       personPortal = dataPortal;
-      ApplicationContext = applicationContext;
       Dashboard = dashboard;
     }
 
@@ -74,25 +50,25 @@ namespace CslaDI
         person = await personPortal.FetchAsync("Andrea");
         WritePerson(person);
 
-        person = await personPortal.CreateAsync("Andrea");
+        person = await personPortal.CreateAsync("Frederick");
         person.Name = "Ali";
         await person.SaveAndMergeAsync();
         WritePerson(person);
 
+        // cause a data portal failure
         //person = await personPortal.FetchAsync("Boo");
       }
-      catch (Exception ex)
+      finally
       {
-        Console.WriteLine(ex.ToString());
+        await Task.Delay(500);
+        Console.WriteLine();
+        Console.WriteLine($"Data portal calls");
+        Console.WriteLine($" - Completed:  {Dashboard.CompletedCalls}");
+        Console.WriteLine($" - Failed:     {Dashboard.FailedCalls}");
+        Console.WriteLine($" - First call: {Dashboard.FirstCall}");
+        Console.WriteLine($" - Last call:  {Dashboard.LastCall}");
+        Console.WriteLine();
       }
-
-      await Task.Delay(500);
-      Console.WriteLine();
-      Console.WriteLine($"Data portal calls");
-      Console.WriteLine($" - Completed:  {Dashboard.CompletedCalls}");
-      Console.WriteLine($" - Failed:     {Dashboard.FailedCalls}");
-      Console.WriteLine($" - First call: {Dashboard.FirstCall}");
-      Console.WriteLine($" - Last call:  {Dashboard.LastCall}");
     }
 
     private void WritePerson(PersonEdit person)
@@ -106,6 +82,9 @@ namespace CslaDI
     }
   }
 
+  /// <summary>
+  /// Root parent class
+  /// </summary>
   [Serializable]
   public class PersonEdit : BusinessBase<PersonEdit>
   {
@@ -151,13 +130,12 @@ namespace CslaDI
     }
   }
 
+  /// <summary>
+  /// Child list class
+  /// </summary>
   [Serializable]
   public class ContactEditList : BusinessListBase<ContactEditList, ContactEdit>
   {
-    [CreateChild]
-    private void Create()
-    { }
-
     [FetchChild]
     private void Fetch([Inject] IChildDataPortal<ContactEdit> contactPortal)
     {
@@ -169,6 +147,9 @@ namespace CslaDI
     }
   }
 
+  /// <summary>
+  /// Child class
+  /// </summary>
   [Serializable]
   public class ContactEdit : BusinessBase<ContactEdit>
   {
