@@ -19,6 +19,7 @@ namespace CslaExtensions
       services.AddTransient<Csla.Server.DataPortalSelector>();
       services.AddTransient<Csla.Server.DataPortalBroker>();
       services.AddTransient(typeof(IDataPortal<>), typeof(Csla.DataPortal<>));
+      services.AddTransient(typeof(IChildDataPortal<>), typeof(Csla.DataPortal<>));
     }
   }
 }
@@ -65,7 +66,8 @@ namespace CslaDI
         var person = await personPortal.CreateAsync("Andrea");
         Console.WriteLine($"Name {person.Name}, IsNew {person.IsNew}");
         person = await personPortal.FetchAsync("Andrea");
-        Console.WriteLine($"Name {person.Name}, IsNew {person.IsNew}");
+        Console.WriteLine($"Name   {person.Name}, IsNew {person.IsNew}");
+        Console.WriteLine($"Mobile {person.ContactList[0].ContactInfo}");
         person = await personPortal.CreateAsync("Andrea");
         person.Name = "Ali";
         await person.SaveAndMergeAsync();
@@ -89,19 +91,28 @@ namespace CslaDI
       set => SetProperty(NameProperty, value);
     }
 
+    public static readonly PropertyInfo<ContactEditList> ContactListProperty = RegisterProperty<ContactEditList>(nameof(ContactList));
+    public ContactEditList ContactList
+    {
+      get => GetProperty(ContactListProperty);
+      private set => LoadProperty(ContactListProperty, value);
+    }
+
     [Create]
-    private void Create(string name)
+    private void Create(string name, [Inject] IChildDataPortal<ContactEditList> contactPortal)
     {
       Name = name;
+      ContactList = contactPortal.CreateChild();
     }
 
     [Fetch]
-    private void Fetch(string name)
+    private void Fetch(string name, [Inject] IChildDataPortal<ContactEditList> contactPortal)
     {
       using (BypassPropertyChecks)
       {
         Name = name;
       }
+      ContactList = contactPortal.FetchChild();
     }
 
     [Insert]
@@ -109,6 +120,67 @@ namespace CslaDI
     private void Update()
     {
 
+    }
+  }
+
+  [Serializable]
+  public class ContactEditList : BusinessListBase<ContactEditList, ContactEdit>
+  {
+    [FetchChild]
+    private void Fetch([Inject] IChildDataPortal<ContactEdit> contactPortal)
+    {
+      using (LoadListMode)
+      {
+        Add(contactPortal.FetchChild("mobile", "555-1234"));
+      }
+    }
+  }
+
+  [Serializable]
+  public class ContactEdit : BusinessBase<ContactEdit>
+  {
+    public static readonly PropertyInfo<string> NameProperty = RegisterProperty<string>(nameof(Type));
+    public string Type
+    {
+      get => GetProperty(NameProperty);
+      set => SetProperty(NameProperty, value);
+    }
+
+    public static readonly PropertyInfo<string> ContactInfoProperty = RegisterProperty<string>(nameof(ContactInfo));
+    public string ContactInfo
+    {
+      get => GetProperty(ContactInfoProperty);
+      set => SetProperty(ContactInfoProperty, value);
+    }
+
+    [CreateChild]
+    private void Create(string type, string info)
+    {
+      Type = type;
+      ContactInfo = info;
+    }
+
+    [FetchChild]
+    private void Fetch(string type, string info)
+    {
+      using (BypassPropertyChecks)
+      {
+        Type = type;
+        ContactInfo = info;
+      }
+    }
+
+    [InsertChild]
+    [UpdateChild]
+    private void Update()
+    {
+
+    }
+    
+    [DeleteSelfChild]
+    private void Delete()
+    { 
+    
     }
   }
 }
