@@ -64,19 +64,30 @@ namespace CslaDI
       try
       {
         var person = await personPortal.CreateAsync("Andrea");
-        Console.WriteLine($"Name {person.Name}, IsNew {person.IsNew}");
+        WritePerson(person);
+
         person = await personPortal.FetchAsync("Andrea");
-        Console.WriteLine($"Name   {person.Name}, IsNew {person.IsNew}");
-        Console.WriteLine($"Mobile {person.ContactList[0].ContactInfo}");
+        WritePerson(person);
+
         person = await personPortal.CreateAsync("Andrea");
         person.Name = "Ali";
         await person.SaveAndMergeAsync();
-        Console.WriteLine($"Name {person.Name}, IsNew {person.IsNew}");
+        WritePerson(person);
       }
       catch (Exception ex)
       {
         Console.WriteLine(ex.ToString());
         throw;
+      }
+    }
+
+    private void WritePerson(PersonEdit person)
+    {
+      Console.WriteLine($"Name {person.Name}, IsNew {person.IsNew}");
+      Console.WriteLine($" Contacts {person.ContactList.Count}");
+      foreach (var item in person.ContactList)
+      {
+        Console.WriteLine($" - {item.Type} {item.ContactInfo}");
       }
     }
   }
@@ -126,12 +137,17 @@ namespace CslaDI
   [Serializable]
   public class ContactEditList : BusinessListBase<ContactEditList, ContactEdit>
   {
+    [CreateChild]
+    private void Create()
+    { }
+
     [FetchChild]
     private void Fetch([Inject] IChildDataPortal<ContactEdit> contactPortal)
     {
       using (LoadListMode)
       {
         Add(contactPortal.FetchChild("mobile", "555-1234"));
+        Add(contactPortal.FetchChild("email", "someone@somewhere.foo"));
       }
     }
   }
